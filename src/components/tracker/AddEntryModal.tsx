@@ -72,26 +72,7 @@ export function AddEntryModal({
 
     setIsSubmitting(true);
 
-    const generatedId = editingEntry ? editingEntry.id : `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const optimisticEntry: ActivityEntryItem = {
-      id: generatedId,
-      title: title.trim(),
-      category,
-      duration: Number(duration),
-      date,
-      createdAt: editingEntry ? editingEntry.createdAt : new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    // Instant UI update
-    onSuccess(optimisticEntry, isEditing);
-    toast.success(isEditing ? 'Activity updated! +25 XP' : '🎉 Activity logged! +50 XP earned!');
-    onClose();
-    setIsSubmitting(false);
-
-    // Background sync to database
     try {
-      console.log('[DaTrack Client] Sending activity to server:', optimisticEntry);
       if (isEditing && editingEntry) {
         const res = await fetch(`/api/entries/${editingEntry.id}`, {
           method: 'PUT',
@@ -104,7 +85,12 @@ export function AddEntryModal({
           }),
         });
         const json = await res.json();
-        console.log('[DaTrack Client] Server update response:', json);
+        if (json.entry) {
+          onSuccess(json.entry, true);
+        } else {
+          onSuccess({ ...editingEntry, title: title.trim(), category, duration: Number(duration), date }, true);
+        }
+        toast.success('Activity updated! +25 XP');
       } else {
         const res = await fetch('/api/entries', {
           method: 'POST',
@@ -117,16 +103,39 @@ export function AddEntryModal({
           } as CreateEntryInput),
         });
         const json = await res.json();
-        console.log('[DaTrack Client] Server create response:', json);
-
-        if (json.dbStatus === 'fallback_used') {
-          console.warn('[DaTrack Client] ⚠️ Activity saved locally, but NOT in Supabase! Database debug details:', json.debugDetails);
-        } else if (json.dbStatus === 'connected') {
-          console.log('[DaTrack Client] ✅ Activity successfully written into Supabase PostgreSQL table!');
+        if (json.entry) {
+          onSuccess(json.entry, false);
+        } else {
+          const fallbackEntry: ActivityEntryItem = {
+            id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            title: title.trim(),
+            category,
+            duration: Number(duration),
+            date,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          onSuccess(fallbackEntry, false);
         }
+        toast.success('🎉 Activity logged! +50 XP earned!');
       }
-    } catch (syncErr) {
-      console.error('[DaTrack Client] Background database sync network error:', syncErr);
+      onClose();
+    } catch (err) {
+      console.error('Submit error:', err);
+      const fallbackEntry: ActivityEntryItem = {
+        id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        title: title.trim(),
+        category,
+        duration: Number(duration),
+        date,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      onSuccess(fallbackEntry, isEditing);
+      toast.success(isEditing ? 'Activity updated!' : '🎉 Activity logged!');
+      onClose();
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

@@ -306,19 +306,17 @@ export function mergeEntries(
   serverEntries: ActivityEntryItem[],
   localEntries: ActivityEntryItem[]
 ): ActivityEntryItem[] {
-  const map = new Map<string, ActivityEntryItem>();
-
-  // Add local entries first
-  localEntries.forEach((e) => {
-    if (e && e.id) map.set(e.id, e);
-  });
-
-  // Merge/override with server entries (server has authoritative timestamps)
-  serverEntries.forEach((e) => {
-    if (e && e.id) map.set(e.id, e);
-  });
-
-  return Array.from(map.values()).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  if (serverEntries && serverEntries.length > 0) {
+    const datesCovered = new Set(serverEntries.map((e) => e.date));
+    // Filter out old temporary local entries for the dates covered by server
+    const otherDatesLocal = localEntries.filter(
+      (e) => !datesCovered.has(e.date)
+    );
+    const combined = [...serverEntries, ...otherDatesLocal];
+    return combined.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+  return localEntries;
 }
+
