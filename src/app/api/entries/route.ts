@@ -23,10 +23,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    console.log('[API /api/entries POST] Received body:', JSON.stringify(body));
+
     const result = await createEntry(body);
+    console.log('[API /api/entries POST] createEntry result:', JSON.stringify(result));
 
     if (!result.success) {
-      return NextResponse.json({ error: result.error || 'Failed to create entry' }, { status: 400 });
+      return NextResponse.json({ error: result.error || 'Failed to create entry', details: result }, { status: 400 });
     }
 
     return NextResponse.json(result, {
@@ -36,6 +39,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (err: any) {
+    console.error('[API /api/entries POST] Error:', err);
     return NextResponse.json({ error: err?.message || 'Invalid JSON payload' }, { status: 400 });
   }
 }

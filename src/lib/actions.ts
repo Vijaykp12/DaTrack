@@ -211,9 +211,17 @@ export async function createEntry(data: CreateEntryInput): Promise<{
   success: boolean;
   entry?: ActivityEntryItem;
   error?: string;
+  dbStatus?: 'connected' | 'fallback_used';
+  debugDetails?: any;
 }> {
+  console.log('[Supabase / Database] >>> createEntry called with input:', JSON.stringify(data));
+  const hasDbUrl = Boolean(process.env.DATABASE_URL);
+  console.log('[Supabase / Database] DATABASE_URL is configured:', hasDbUrl);
+
   try {
     const { target } = parseDateParam(data.date);
+
+    console.log('[Supabase / Database] Attempting prisma.activityEntry.create with date:', target.toISOString());
 
     const raw = await prisma.activityEntry.create({
       data: {
@@ -224,11 +232,14 @@ export async function createEntry(data: CreateEntryInput): Promise<{
       },
     });
 
+    console.log('[Supabase / Database] ✅ SUCCESS! Row inserted into Supabase ActivityEntry table with ID:', raw.id);
+
     revalidatePath('/', 'page');
     revalidatePath('/analytics', 'page');
 
     return {
       success: true,
+      dbStatus: 'connected',
       entry: {
         id: raw.id,
         title: raw.title,
@@ -240,19 +251,33 @@ export async function createEntry(data: CreateEntryInput): Promise<{
       },
     };
   } catch (err: any) {
-    console.error('Database createEntry error:', err);
+    const errorCode = err?.code || 'UNKNOWN';
+    const errorMessage = err?.message || String(err);
+    console.error('[Supabase / Database] ❌ ERROR in prisma.activityEntry.create!');
+    console.error('[Supabase / Database] Error Code:', errorCode);
+    console.error('[Supabase / Database] Error Message:', errorMessage);
+    console.error('[Supabase / Database] Full Error Stack:', err?.stack || err);
+
     try {
       const entry = storeCreate(data);
       revalidatePath('/', 'page');
       revalidatePath('/analytics', 'page');
-      return { success: true, entry };
+      return {
+        success: true,
+        dbStatus: 'fallback_used',
+        entry,
+        debugDetails: {
+          errorCode,
+          errorMessage: errorMessage.split('\n')[0],
+          hint: errorCode === 'P2021' ? 'Table missing in Supabase' : errorCode === 'P1001' ? 'Database unreachable' : 'Check DATABASE_URL',
+        },
+      };
     } catch (storeErr: any) {
-      console.error('Local store fallback error:', storeErr);
+      console.error('[Supabase / Database] Local store fallback failed as well:', storeErr);
       return {
         success: false,
-        error:
-          err?.message ||
-          'Database error: Please check your DATABASE_URL in Vercel settings and ensure the schema is pushed.',
+        error: `Database error (${errorCode}): ${errorMessage.split('\n')[0]}`,
+        debugDetails: { errorCode, errorMessage },
       };
     }
   }

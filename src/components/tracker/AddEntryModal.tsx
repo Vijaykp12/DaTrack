@@ -91,8 +91,9 @@ export function AddEntryModal({
 
     // Background sync to database
     try {
+      console.log('[DaTrack Client] Sending activity to server:', optimisticEntry);
       if (isEditing && editingEntry) {
-        await fetch(`/api/entries/${editingEntry.id}`, {
+        const res = await fetch(`/api/entries/${editingEntry.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -102,8 +103,10 @@ export function AddEntryModal({
             date,
           }),
         });
+        const json = await res.json();
+        console.log('[DaTrack Client] Server update response:', json);
       } else {
-        await fetch('/api/entries', {
+        const res = await fetch('/api/entries', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -113,9 +116,17 @@ export function AddEntryModal({
             date,
           } as CreateEntryInput),
         });
+        const json = await res.json();
+        console.log('[DaTrack Client] Server create response:', json);
+
+        if (json.dbStatus === 'fallback_used') {
+          console.warn('[DaTrack Client] ⚠️ Activity saved locally, but NOT in Supabase! Database debug details:', json.debugDetails);
+        } else if (json.dbStatus === 'connected') {
+          console.log('[DaTrack Client] ✅ Activity successfully written into Supabase PostgreSQL table!');
+        }
       }
     } catch (syncErr) {
-      console.warn('Background database sync error (persisted locally):', syncErr);
+      console.error('[DaTrack Client] Background database sync network error:', syncErr);
     }
   };
 
