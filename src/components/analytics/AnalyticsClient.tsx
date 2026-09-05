@@ -12,7 +12,13 @@ import { CategoryActivityPieCharts } from './CategoryActivityPieCharts';
 import { AddEntryModal } from '@/components/tracker/AddEntryModal';
 import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 import { getTodayDateString } from '@/lib/formatters';
-import { Loader2, Plus, BarChart2, Inbox, RefreshCw } from 'lucide-react';
+import {
+  calculateAnalyticsSummary,
+  getLocalEntries,
+  saveLocalEntries,
+  mergeEntries,
+} from '@/lib/calculations';
+import { Loader2, Plus, BarChart2, Inbox } from 'lucide-react';
 
 export interface AnalyticsClientProps {
   initialSummary?: AnalyticsSummary;
@@ -32,7 +38,14 @@ export function AnalyticsClient({
   const [activePreset, setActivePreset] = useState<DateRangePreset>(initialPreset);
   const [startDate, setStartDate] = useState<string>(initialStart);
   const [endDate, setEndDate] = useState<string>(initialEnd);
-  const [summary, setSummary] = useState<AnalyticsSummary | undefined>(initialSummary);
+  const [summary, setSummary] = useState<AnalyticsSummary | undefined>(() => {
+    if (initialSummary && initialSummary.totalMinutes > 0) return initialSummary;
+    const local = getLocalEntries();
+    if (local.length > 0) {
+      return calculateAnalyticsSummary(local, initialStart, initialEnd);
+    }
+    return initialSummary;
+  });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | undefined>(initialError);
 
@@ -50,13 +63,20 @@ export function AnalyticsClient({
         },
       });
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && data && (data.totalMinutes > 0 || !data.error)) {
         setSummary(data);
       } else {
-        setError(data.error || 'Failed to fetch analytics');
+        // Fallback to local
+        const local = getLocalEntries();
+        if (local.length > 0) {
+          setSummary(calculateAnalyticsSummary(local, start, end));
+        }
       }
     } catch {
-      setError('Network error loading analytics.');
+      const local = getLocalEntries();
+      if (local.length > 0) {
+        setSummary(calculateAnalyticsSummary(local, start, end));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -64,6 +84,10 @@ export function AnalyticsClient({
 
   // Real-time auto-fetch on mount and on window focus / tab return
   useEffect(() => {
+    const local = getLocalEntries();
+    if (local.length > 0) {
+      setSummary(calculateAnalyticsSummary(local, startDate, endDate));
+    }
     fetchAnalytics(startDate, endDate);
 
     const handleFocus = () => {

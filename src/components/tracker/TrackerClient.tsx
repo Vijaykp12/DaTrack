@@ -14,7 +14,14 @@ import { GamifiedTaskQuest } from '@/components/gamified/GamifiedTaskQuest';
 import { EntryList } from './EntryList';
 import { AddEntryModal } from './AddEntryModal';
 import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
-import { getTodayDateString, formatMinutes } from '@/lib/formatters';
+import { getTodayDateString } from '@/lib/formatters';
+import {
+  calculateDailySummary,
+  calculateWeeklyCapsules,
+  getLocalEntries,
+  saveLocalEntries,
+  mergeEntries,
+} from '@/lib/calculations';
 import { toast } from 'sonner';
 
 export interface TrackerClientProps {
@@ -32,19 +39,29 @@ export function TrackerClient({
   initialWeeklyCapsules,
 }: TrackerClientProps) {
   const [selectedDate, setSelectedDate] = useState<string>(initialDate || getTodayDateString());
-  const [entries, setEntries] = useState<ActivityEntryItem[]>(initialEntries || []);
-  const [summary, setSummary] = useState<DailySummary>(initialSummary);
-  const [weeklyCapsules, setWeeklyCapsules] = useState<DayActivityData[] | undefined>(initialWeeklyCapsules);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  
+  // All known activities across all days for instant reactivity
+  const [allActivities, setAllActivities] = useState<ActivityEntryItem[]>(() => {
+    return initialEntries || [];
+  });
+
+  // Category filter state
+  const [selectedCategory, setSelectedCategory] = useState<ActivityCategory | 'ALL'>('ALL');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<ActivityEntryItem | null>(null);
 
-  // Category filter state
-  const [selectedCategory, setSelectedCategory] = useState<ActivityCategory | 'ALL'>('ALL');
+  // Derive filtered entries for selected date
+  const dayEntries = allActivities
+    .filter((item) => item.date === selectedDate)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  // Fetch entries for a given date with zero caching
+  // Derive summary and weekly capsules in real-time
+  const summary: DailySummary = calculateDailySummary(allActivities, selectedDate);
+  const weeklyCapsules: DayActivityData[] = calculateWeeklyCapsules(allActivities, selectedDate);
+
+  // Sync with server & local storage
   const fetchDateEntries = useCallback(async (date: string) => {
     try {
       const res = await fetch(`/api/entries?date=${date}&_t=${Date.now()}`, {
@@ -55,23 +72,27 @@ export function TrackerClient({
         },
       });
       const data = await res.json();
-      if (res.ok) {
-        setEntries(data.entries || []);
-        if (data.summary) {
-          setSummary(data.summary);
-        }
-        if (data.weeklyCapsules) {
-          setWeeklyCapsules(data.weeklyCapsules);
-        }
+      if (res.ok && Array.isArray(data.entries)) {
+        const local = getLocalEntries();
+        const merged = mergeEntries(data.entries, local);
+        setAllActivities(merged);
+        saveLocalEntries(merged);
       }
     } catch {
-      // Network failover
+      // Offline fallback: load from local storage
+      const local = getLocalEntries();
+      if (local.length > 0) {
+        setAllActivities((prev) => mergeEntries(prev, local));
+      }
     }
   }, []);
 
-  // Auto-fetch whenever the user views the tab or brings the app into focus
+  // Initialize from LocalStorage on mount & auto-sync
   useEffect(() => {
-    // Initial fresh fetch on mount
+    const local = getLocalEntries();
+    if (local.length > 0) {
+      setAllActivities((prev) => mergeEntries(prev, local));
+    }
     fetchDateEntries(selectedDate);
 
     const handleFocus = () => {
@@ -108,45 +129,49 @@ export function TrackerClient({
     setIsModalOpen(true);
   };
 
+  // Instant real-time update when entry is added or edited
   const handleModalSuccess = (entry: ActivityEntryItem, isEdit: boolean) => {
-    if (entry.date === selectedDate) {
-      // Optimistically update list
-      setEntries((prev) => {
-        if (isEdit) {
-          return prev.map((e) => (e.id === entry.id ? entry : e));
-        }
-        const filtered = prev.filter((e) => e.id !== entry.id);
-        return [entry, ...filtered];
-      });
-      fetchDateEntries(selectedDate);
-    } else {
-      toast.info(`Logged for ${entry.date}`);
-      handleDateChange(entry.date);
+    setAllActivities((prev) => {
+      let updated: ActivityEntryItem[];
+      if (isEdit) {
+        updated = prev.map((e) => (e.id === entry.id ? entry : e));
+      } else {
+        const withoutCurrent = prev.filter((e) => e.id !== entry.id);
+        updated = [entry, ...withoutCurrent];
+      }
+      saveLocalEntries(updated);
+      return updated;
+    });
+
+    if (entry.date !== selectedDate) {
+      setSelectedDate(entry.date);
     }
   };
 
+  // Instant real-time delete
   const handleDeleteEntry = async (id: string) => {
-    const prev = [...entries];
-    // Optimistic delete
-    setEntries((curr) => curr.filter((item) => item.id !== id));
+    setAllActivities((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      saveLocalEntries(updated);
+      return updated;
+    });
+
+    toast.success('Activity removed');
 
     try {
-      const res = await fetch(`/api/entries/${id}`, {
+      await fetch(`/api/entries/${id}`, {
         method: 'DELETE',
         headers: { 'Cache-Control': 'no-cache' },
       });
-      if (res.ok) {
-        toast.success('Activity removed');
-        fetchDateEntries(selectedDate);
-      } else {
-        setEntries(prev);
-        toast.error('Failed to delete activity');
-      }
     } catch {
-      setEntries(prev);
-      toast.error('Network error deleting activity');
+      // Already removed locally
     }
   };
+
+  const displayedEntries =
+    selectedCategory === 'ALL'
+      ? dayEntries
+      : dayEntries.filter((e) => e.category === selectedCategory);
 
   const productiveHoursDecimal = ((summary?.productiveMinutes || 0) / 60).toFixed(1) + 'h';
 
@@ -198,7 +223,7 @@ export function TrackerClient({
           {/* Detailed Activity Log List */}
           <div className="pt-2">
             <EntryList
-              entries={entries}
+              entries={displayedEntries}
               onEdit={handleOpenEdit}
               onDelete={handleDeleteEntry}
               onOpenAddEntry={handleOpenAdd}
