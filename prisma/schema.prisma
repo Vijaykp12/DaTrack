@@ -9,11 +9,11 @@ datasource db {
 }
 
 enum Category {
-  PRODUCTIVE_WORK    @map("Productive Work")
-  DAILY_NECESSITIES  @map("Daily Necessities")
-  ENTERTAINMENT      @map("Entertainment")
-  DISTRACTIONS       @map("Distractions")
-  PERSONAL_WORK      @map("Personal Work")
+  PRODUCTIVE_WORK
+  DAILY_NECESSITIES
+  ENTERTAINMENT
+  DISTRACTIONS
+  PERSONAL_WORK
 }
 
 model ActivityEntry {

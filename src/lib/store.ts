@@ -16,24 +16,30 @@ import { eachDayOfInterval, format } from 'date-fns';
 const DATA_FILE = path.join(process.cwd(), 'data_store.json');
 
 // Real storage without dummy auto-seed placeholders
+let memoryStore: ActivityEntryItem[] = [];
+
 export function readStore(): ActivityEntryItem[] {
   try {
-    if (!fs.existsSync(DATA_FILE)) {
-      fs.writeFileSync(DATA_FILE, '[]', 'utf-8');
-      return [];
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        memoryStore = parsed;
+        return parsed;
+      }
     }
-    const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-    return JSON.parse(raw);
   } catch {
-    return [];
+    // Ignore read errors on serverless
   }
+  return memoryStore;
 }
 
 export function writeStore(data: ActivityEntryItem[]) {
+  memoryStore = data;
   try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
-  } catch (e) {
-    console.error('Failed to write store:', e);
+  } catch {
+    // Read-only filesystem on Vercel lambda - memoryStore is used
   }
 }
 
