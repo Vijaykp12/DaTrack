@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Category {
+  PRODUCTIVE_WORK    @map("Productive Work")
+  DAILY_NECESSITIES  @map("Daily Necessities")
+  ENTERTAINMENT      @map("Entertainment")
+  DISTRACTIONS       @map("Distractions")
+  PERSONAL_WORK      @map("Personal Work")
+}
+
+model ActivityEntry {
+  id        String   @id @default(cuid())
+  title     String
+  category  Category
+  duration  Int      // Duration in minutes
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([category])
+}

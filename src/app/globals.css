@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 135 25% 94%; /* Soft Mint / Sage #E9F1EB */
+    --foreground: 215 25% 15%; /* Deep Charcoal */
+
+    --card: 0 0% 100%; /* Pure White */
+    --card-foreground: 215 25% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    --primary: 84 90% 55%; /* Lime Neon #C6F432 */
+    --primary-foreground: 215 25% 15%;
+
+    --secondary: 140 20% 90%;
+    --secondary-foreground: 215 25% 20%;
+
+    --muted: 215 15% 92%;
+    --muted-foreground: 215 12% 52%;
+
+    --accent: 84 90% 55%;
+    --accent-foreground: 215 25% 15%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 215 15% 90%;
+    --input: 215 15% 90%;
+    --ring: 84 90% 50%;
+
+    --radius: 1.5rem;
+  }
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    background-color: #E9F1EB;
+    color: #141D26;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-tap-highlight-color: transparent;
+    min-height: 100vh;
+  }
+}
+
+/* Gamified crisp white card style */
+.game-card {
+  background: #FFFFFF;
+  border-radius: 1.5rem;
+  box-shadow: 0 6px 24px -4px rgba(20, 29, 38, 0.05), 0 2px 6px -1px rgba(20, 29, 38, 0.03);
+  border: 1px solid rgba(20, 29, 38, 0.03);
+  transition: all 0.2s ease-in-out;
+}
+
+.game-card:hover {
+  box-shadow: 0 10px 30px -4px rgba(20, 29, 38, 0.08);
+}
+
+/* Dark sidebar styling */
+.game-sidebar {
+  background: #141D26;
+  color: #FFFFFF;
+}
+
+/* Radar pulse animation */
+@keyframes radarPulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+}
+
+.animate-radar {
+  animation: radarPulse 3s infinite ease-in-out;
+}
+
+/* Custom modern scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(20, 29, 38, 0.15);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(20, 29, 38, 0.25);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
