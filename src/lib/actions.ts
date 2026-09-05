@@ -224,8 +224,8 @@ export async function createEntry(data: CreateEntryInput): Promise<{
       },
     });
 
-    revalidatePath('/');
-    revalidatePath('/analytics');
+    revalidatePath('/', 'page');
+    revalidatePath('/analytics', 'page');
 
     return {
       success: true,
@@ -239,11 +239,22 @@ export async function createEntry(data: CreateEntryInput): Promise<{
         updatedAt: raw.updatedAt.toISOString(),
       },
     };
-  } catch {
-    const entry = storeCreate(data);
-    revalidatePath('/');
-    revalidatePath('/analytics');
-    return { success: true, entry };
+  } catch (err: any) {
+    console.error('Database createEntry error:', err);
+    try {
+      const entry = storeCreate(data);
+      revalidatePath('/', 'page');
+      revalidatePath('/analytics', 'page');
+      return { success: true, entry };
+    } catch (storeErr: any) {
+      console.error('Local store fallback error:', storeErr);
+      return {
+        success: false,
+        error:
+          err?.message ||
+          'Database error: Please check your DATABASE_URL in Vercel settings and ensure the schema is pushed.',
+      };
+    }
   }
 }
 
@@ -270,8 +281,8 @@ export async function updateEntry(
       data: updateData,
     });
 
-    revalidatePath('/');
-    revalidatePath('/analytics');
+    revalidatePath('/', 'page');
+    revalidatePath('/analytics', 'page');
 
     return {
       success: true,
@@ -285,11 +296,16 @@ export async function updateEntry(
         updatedAt: raw.updatedAt.toISOString(),
       },
     };
-  } catch {
-    const entry = storeUpdate(id, data);
-    revalidatePath('/');
-    revalidatePath('/analytics');
-    return { success: true, entry: entry || undefined };
+  } catch (err: any) {
+    console.error('Database updateEntry error:', err);
+    try {
+      const entry = storeUpdate(id, data);
+      revalidatePath('/', 'page');
+      revalidatePath('/analytics', 'page');
+      return { success: true, entry: entry || undefined };
+    } catch (storeErr: any) {
+      return { success: false, error: err?.message || 'Database update error' };
+    }
   }
 }
 
@@ -304,15 +320,20 @@ export async function deleteEntry(
       where: { id },
     });
 
-    revalidatePath('/');
-    revalidatePath('/analytics');
+    revalidatePath('/', 'page');
+    revalidatePath('/analytics', 'page');
 
     return { success: true };
-  } catch {
-    storeDelete(id);
-    revalidatePath('/');
-    revalidatePath('/analytics');
-    return { success: true };
+  } catch (err: any) {
+    console.error('Database deleteEntry error:', err);
+    try {
+      storeDelete(id);
+      revalidatePath('/', 'page');
+      revalidatePath('/analytics', 'page');
+      return { success: true };
+    } catch (storeErr: any) {
+      return { success: false, error: err?.message || 'Database delete error' };
+    }
   }
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ActivityEntryItem, DailySummary, ActivityCategory } from '@/types';
 import { GamifiedSidebar } from '@/components/gamified/GamifiedSidebar';
 import { GamifiedHeader } from '@/components/gamified/GamifiedHeader';
@@ -44,25 +44,54 @@ export function TrackerClient({
   // Category filter state
   const [selectedCategory, setSelectedCategory] = useState<ActivityCategory | 'ALL'>('ALL');
 
-  // Fetch entries when date changes
+  // Fetch entries for a given date with zero caching
   const fetchDateEntries = useCallback(async (date: string) => {
-    setIsLoading(true);
     try {
-      const res = await fetch(`/api/entries?date=${date}`);
+      const res = await fetch(`/api/entries?date=${date}&_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      });
       const data = await res.json();
       if (res.ok) {
         setEntries(data.entries || []);
-        setSummary(data.summary);
+        if (data.summary) {
+          setSummary(data.summary);
+        }
         if (data.weeklyCapsules) {
           setWeeklyCapsules(data.weeklyCapsules);
         }
       }
     } catch {
-      // Quiet failover
-    } finally {
-      setIsLoading(false);
+      // Network failover
     }
   }, []);
+
+  // Auto-fetch whenever the user views the tab or brings the app into focus
+  useEffect(() => {
+    // Initial fresh fetch on mount
+    fetchDateEntries(selectedDate);
+
+    const handleFocus = () => {
+      fetchDateEntries(selectedDate);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchDateEntries(selectedDate);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchDateEntries, selectedDate]);
 
   const handleDateChange = (newDate: string) => {
     setSelectedDate(newDate);
@@ -79,8 +108,16 @@ export function TrackerClient({
     setIsModalOpen(true);
   };
 
-  const handleModalSuccess = (entry: ActivityEntryItem) => {
+  const handleModalSuccess = (entry: ActivityEntryItem, isEdit: boolean) => {
     if (entry.date === selectedDate) {
+      // Optimistically update list
+      setEntries((prev) => {
+        if (isEdit) {
+          return prev.map((e) => (e.id === entry.id ? entry : e));
+        }
+        const filtered = prev.filter((e) => e.id !== entry.id);
+        return [entry, ...filtered];
+      });
       fetchDateEntries(selectedDate);
     } else {
       toast.info(`Logged for ${entry.date}`);
@@ -88,9 +125,27 @@ export function TrackerClient({
     }
   };
 
-  const handleDeleteEntry = (id: string) => {
-    setEntries((prev) => prev.filter((item) => item.id !== id));
-    fetchDateEntries(selectedDate);
+  const handleDeleteEntry = async (id: string) => {
+    const prev = [...entries];
+    // Optimistic delete
+    setEntries((curr) => curr.filter((item) => item.id !== id));
+
+    try {
+      const res = await fetch(`/api/entries/${id}`, {
+        method: 'DELETE',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (res.ok) {
+        toast.success('Activity removed');
+        fetchDateEntries(selectedDate);
+      } else {
+        setEntries(prev);
+        toast.error('Failed to delete activity');
+      }
+    } catch {
+      setEntries(prev);
+      toast.error('Network error deleting activity');
+    }
   };
 
   const productiveHoursDecimal = ((summary?.productiveMinutes || 0) / 60).toFixed(1) + 'h';

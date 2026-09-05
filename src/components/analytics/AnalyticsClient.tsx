@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { AnalyticsSummary, DateRangePreset } from '@/types';
 import { GamifiedSidebar } from '@/components/gamified/GamifiedSidebar';
 import { GamifiedHeader } from '@/components/gamified/GamifiedHeader';
@@ -12,7 +12,7 @@ import { CategoryActivityPieCharts } from './CategoryActivityPieCharts';
 import { AddEntryModal } from '@/components/tracker/AddEntryModal';
 import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 import { getTodayDateString } from '@/lib/formatters';
-import { Loader2, Plus, BarChart2, Inbox } from 'lucide-react';
+import { Loader2, Plus, BarChart2, Inbox, RefreshCw } from 'lucide-react';
 
 export interface AnalyticsClientProps {
   initialSummary?: AnalyticsSummary;
@@ -42,7 +42,13 @@ export function AnalyticsClient({
     setIsLoading(true);
     setError(undefined);
     try {
-      const res = await fetch(`/api/analytics?startDate=${start}&endDate=${end}`);
+      const res = await fetch(`/api/analytics?startDate=${start}&endDate=${end}&_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      });
       const data = await res.json();
       if (res.ok) {
         setSummary(data);
@@ -55,6 +61,29 @@ export function AnalyticsClient({
       setIsLoading(false);
     }
   }, []);
+
+  // Real-time auto-fetch on mount and on window focus / tab return
+  useEffect(() => {
+    fetchAnalytics(startDate, endDate);
+
+    const handleFocus = () => {
+      fetchAnalytics(startDate, endDate);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchAnalytics(startDate, endDate);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchAnalytics, startDate, endDate]);
 
   const handleRangeChange = (
     preset: DateRangePreset,

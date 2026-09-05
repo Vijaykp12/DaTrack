@@ -3,6 +3,10 @@ import { getAnalyticsData } from '@/lib/actions';
 import { getTodayDateString } from '@/lib/formatters';
 import { subDays, format } from 'date-fns';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const now = new Date();
@@ -18,5 +22,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 500 });
   }
 
-  return NextResponse.json(result.data);
+  return NextResponse.json(result.data, {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    },
+  });
 }
+
